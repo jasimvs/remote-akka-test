@@ -26,7 +26,7 @@ object Main extends App {
 
   val count = 1024
 
-  val system = ActorSystem("PingTestActorSystem", None, None,
+  val system = ActorSystem("ServerTestActorSystem", None, None,
     Some(ExecutionContext.fromExecutor(Executors.newFixedThreadPool(count))))
   // default Actor constructor
   val pingTestActor = system.actorOf(Props[PingTestActor].withRouter(BalancingPool(count)), name = "PingTestActor")
