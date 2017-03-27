@@ -1,5 +1,5 @@
 
-name := "RemoteAkkaBigMessageTestClient"
+name := "RemoteAkkaTestClient"
 
 version := "1.0"
 
