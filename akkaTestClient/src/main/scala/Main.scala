@@ -36,7 +36,7 @@ object Main extends App {
   val numberOfConcurrentRequests = conf.getInt("no-of-concurrent-requests")
   val numberOfTestCycles = conf.getInt("no-of-test-cycles")
   val testMessageStringSize = conf.getInt("test-message-string-size")
-  val hostname = conf.getString("remote-server-hostname-port")
+  val actorAddress = conf.getString("remote-server-actor")
   val waitFactor = conf.getInt("factor-to-wait-for-requests-to-complete")
   val waitTime = numberOfConcurrentRequests * waitFactor
   val testMessage = (1 to testMessageStringSize)
@@ -47,13 +47,13 @@ object Main extends App {
     Some(ExecutionContext.fromExecutor(Executors.newFixedThreadPool(numberOfConcurrentRequests))))
   val printActor = system.actorOf(
       Props[PrintActor].withRouter(BalancingPool(numberOfConcurrentRequests)), name = "PrintActor")
-  val remoteActor = system.actorSelection(s"akka.tcp://ServerTestActorSystem@$hostname/user/PingTestActor")
+  val remoteActor = system.actorSelection(actorAddress)
 
   val ecForLoggingTimestamps = ExecutionContext.fromExecutor(Executors.newSingleThreadExecutor())
 
 
   // warm up
-  1 to numberOfConcurrentRequests map (x => {
+  1 to numberOfConcurrentRequests foreach (x => {
     remoteActor.tell(testMessage, printActor)
   })
   println("Warming up...")
@@ -61,12 +61,12 @@ object Main extends App {
 
 
   // Test
-  1 to numberOfTestCycles map (i => {
+  1 to numberOfTestCycles foreach (i => {
 
     TimestampLog.timestamps.clear()
     val startTime = System.currentTimeMillis()
 
-    1 to numberOfConcurrentRequests map (x => {
+    1 to numberOfConcurrentRequests foreach (x => {
       remoteActor.tell((System.currentTimeMillis(), testMessage), printActor)
       //println(x)
     })
@@ -79,7 +79,7 @@ object Main extends App {
 
     // Results
     val sorted = TimestampLog.timestamps.sortWith(_._1 < _._1)
-    sorted.map(x => println(s"Response delay: ${x._2} , Total time: ${x._1 - startTime}"))
+    sorted.foreach(x => println(s"Response delay: ${x._2} , Total time: ${x._1 - startTime}"))
     println(
       s" Total Time: ${sorted.reverse.head._1 - startTime} millis for ${TimestampLog.timestamps.size} messages. Test $i")
   })
