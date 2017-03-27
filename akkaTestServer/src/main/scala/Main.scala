@@ -9,7 +9,11 @@ import scala.concurrent.ExecutionContext
 
 class PingTestActor extends Actor {
   def receive = {
-    case m@ _       => {
+    case (delay: Long, msg: String) => {
+      println(s"Request delay ${System.currentTimeMillis() - delay}, current thead ${Thread.currentThread().getId}")
+      sender ! Tuple2(System.currentTimeMillis(), msg)
+    }
+    case m @ _ => {
       //println(s"Ping ${m.getClass} ${m.asInstanceOf[String].size}")
       sender ! Tuple2(System.currentTimeMillis(), m)
     }
@@ -28,8 +32,8 @@ object Main extends App {
 
   val system = ActorSystem("ServerTestActorSystem", None, None,
     Some(ExecutionContext.fromExecutor(Executors.newFixedThreadPool(count))))
-  // default Actor constructor
-  val pingTestActor = system.actorOf(Props[PingTestActor].withRouter(BalancingPool(count)), name = "PingTestActor")
+  val pingTestActor = system.actorOf(
+    Props[PingTestActor].withRouter(BalancingPool(count)), name = "PingTestActor")
   val printActor = system.actorOf(Props[PrintActor], name = "PrintActor")
 
   pingTestActor.tell("Hi", printActor)
