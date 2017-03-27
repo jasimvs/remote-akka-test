@@ -4,6 +4,7 @@ import akka.actor.Actor
 import akka.actor.ActorSystem
 import akka.actor.Props
 import akka.routing.BalancingPool
+import com.typesafe.config.ConfigFactory
 
 import scala.concurrent.ExecutionContext
 
@@ -28,7 +29,7 @@ class PrintActor extends Actor {
 
 object Main extends App {
 
-  val count = 1024
+  val count = ConfigFactory.load().getConfig("test-server").getInt("no-of-threads")
 
   val system = ActorSystem("ServerTestActorSystem", None, None,
     Some(ExecutionContext.fromExecutor(Executors.newFixedThreadPool(count))))

@@ -4,6 +4,7 @@ import akka.actor.Actor
 import akka.actor.ActorSystem
 import akka.actor.Props
 import akka.routing.BalancingPool
+import com.typesafe.config.ConfigFactory
 
 import scala.collection.mutable
 import scala.concurrent.{ExecutionContext, Future}
@@ -19,7 +20,7 @@ object TimestampLog {
 
 class PrintActor extends Actor {
 
-  implicit val exc = Main.ec
+  implicit val exc = Main.ecForWritingResults
 
   def receive = {
     case msg: (Long, String) => {
@@ -32,24 +33,24 @@ class PrintActor extends Actor {
 
 object Main extends App {
 
-  val ec = ExecutionContext.fromExecutor(Executors.newSingleThreadExecutor())
-
-  val numberOfConcurrentRequests = 1024
-  val numberOfTestCycles = 1
-
-  val testMessage = (1 to 127000)
+  val conf = ConfigFactory.load().getConfig("test-client")
+  val numberOfConcurrentRequests = conf.getInt("no-of-concurrent-requests")
+  val numberOfTestCycles = conf.getInt("no-of-test-cycles")
+  val testMessageStringSize = conf.getInt("test-message-string-size")
+  val hostname = conf.getString("remote-server-hostname-port")
+  val waitFactor = conf.getInt("factor-to-wait-for-requests-to-complete")
+  val waitTime = numberOfConcurrentRequests * waitFactor
+  val testMessage = (1 to testMessageStringSize)
     .map(x => "x")
     .fold("")((acc, str) => acc + str)
 
   val system = ActorSystem("ClientTestActorSystem", None, None,
     Some(ExecutionContext.fromExecutor(Executors.newFixedThreadPool(numberOfConcurrentRequests))))
-
   val printActor = system.actorOf(
       Props[PrintActor].withRouter(BalancingPool(numberOfConcurrentRequests)), name = "PrintActor")
+  val remoteActor = system.actorSelection(s"akka.tcp://ServerTestActorSystem@$hostname/user/PingTestActor")
 
-  val remoteActor = system.actorSelection("akka.tcp://ServerTestActorSystem@127.0.0.1:2552/user/PingTestActor")
-
-  val sleepFactor = 3
+  val ecForWritingResults = ExecutionContext.fromExecutor(Executors.newSingleThreadExecutor())
 
 
   // warm up
@@ -57,7 +58,7 @@ object Main extends App {
     remoteActor.tell(testMessage, printActor)
   })
   println("Warming up...")
-  Thread.sleep(2000 + numberOfConcurrentRequests * sleepFactor)
+  Thread.sleep(1000 + waitTime)
 
 
   // Test
@@ -71,7 +72,7 @@ object Main extends App {
       //println(x)
     })
     println(s"Total time to sent concurrent requests ${System.currentTimeMillis() - startTime}")
-    Thread.sleep(2000 + numberOfConcurrentRequests * sleepFactor)
+    Thread.sleep(waitTime)
 
 
     // Results
