@@ -7,7 +7,8 @@ import akka.routing.BalancingPool
 import com.typesafe.config.ConfigFactory
 
 import scala.collection.mutable
-import scala.concurrent.{ExecutionContext, Future}
+import scala.concurrent.duration.Duration
+import scala.concurrent.{Await, ExecutionContext, Future}
 
 object TimestampLog {
 
@@ -15,17 +16,15 @@ object TimestampLog {
 
   val timestamps: mutable.MutableList[ReceiveTimeAndDelayTuple] = mutable.MutableList.empty
 
-  def insert(value: ReceiveTimeAndDelayTuple) = synchronized(timestamps += value)
+  def insert(value: ReceiveTimeAndDelayTuple) = timestamps += value
 }
 
 class PrintActor extends Actor {
 
-  implicit val exc = Main.ecForWritingResults
-
   def receive = {
-    case msg: (Long, String) => {
+    case (messageSendTime: Long, msg: String) => {
       val currentTime = System.currentTimeMillis()
-      Future(TimestampLog.insert((currentTime, currentTime - msg._1)))
+      Future(TimestampLog.insert((currentTime, currentTime - messageSendTime)))(Main.ecForLoggingTimestamps)
     }
     case msg @ _ => println(s"Ignoring $msg")
   }
@@ -50,7 +49,7 @@ object Main extends App {
       Props[PrintActor].withRouter(BalancingPool(numberOfConcurrentRequests)), name = "PrintActor")
   val remoteActor = system.actorSelection(s"akka.tcp://ServerTestActorSystem@$hostname/user/PingTestActor")
 
-  val ecForWritingResults = ExecutionContext.fromExecutor(Executors.newSingleThreadExecutor())
+  val ecForLoggingTimestamps = ExecutionContext.fromExecutor(Executors.newSingleThreadExecutor())
 
 
   // warm up
@@ -74,6 +73,9 @@ object Main extends App {
     println(s"Total time to sent concurrent requests ${System.currentTimeMillis() - startTime}")
     Thread.sleep(waitTime)
 
+    while(TimestampLog.timestamps.isEmpty) {
+      Thread.sleep(1000)
+    }
 
     // Results
     val sorted = TimestampLog.timestamps.sortWith(_._1 < _._1)
@@ -81,4 +83,6 @@ object Main extends App {
     println(
       s" Total Time: ${sorted.reverse.head._1 - startTime} millis for ${TimestampLog.timestamps.size} messages. Test $i")
   })
+
+  Await.ready(system.terminate(), Duration.Inf)
 }

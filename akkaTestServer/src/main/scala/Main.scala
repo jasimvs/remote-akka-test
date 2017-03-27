@@ -10,8 +10,8 @@ import scala.concurrent.ExecutionContext
 
 class PingTestActor extends Actor {
   def receive = {
-    case (delay: Long, msg: String) => {
-      println(s"Request delay ${System.currentTimeMillis() - delay}, current thead ${Thread.currentThread().getId}")
+    case (messageSendTime: Long, msg: String) => {
+      println(s"Request delay ${System.currentTimeMillis() - messageSendTime}")
       sender ! Tuple2(System.currentTimeMillis(), msg)
     }
     case m @ _ => {
